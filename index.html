@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ZeroCheck</title>
+<meta name="theme-color" content="#101010">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<script src="themes.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body data-page="home">
+
+<header class="top">
+  <a class="brand" href="#home"><span class="mark">Z</span><span>ZeroCheck</span></a>
+  <nav class="actions">
+    <button id="btnCalc" class="ghost">Calc</button>
+    <button id="btnThemes" class="ghost">Themes</button>
+    <button id="btnFocusMode" class="ghost">Focus mode</button>
+  </nav>
+</header>
+
+<main>
+  <!-- Home -->
+  <section id="page-home" class="page">
+    <p class="eyebrow">Study hub</p>
+    <h1 class="hero">Welcome back.</h1>
+
+    <div class="countdown">
+      <span class="lbl">Exam countdown</span>
+      <div id="examOut" class="exam-out">Set an exam date</div>
+      <div class="exam-fields">
+        <input id="examName" type="text" maxlength="40" placeholder="Exam name" autocomplete="off">
+        <input id="examDate" type="date">
+      </div>
+    </div>
+
+    <div class="cards">
+      <a class="tile" href="#tracker"><span class="t-title">Test Tracker</span><span class="t-sub">Tap answers, time each question, check against a key</span></a>
+      <a class="tile" href="#focus"><span class="t-title">Focus &amp; Notes</span><span class="t-sub">Pomodoro timer with a notes area</span></a>
+      <a class="tile" href="#music"><span class="t-title">Ambience &amp; Music</span><span class="t-sub">Ambient scenes, your own music, YouTube</span></a>
+      <button id="tileBackup" class="tile"><span class="t-title">Backup &amp; Restore</span><span class="t-sub">Save your data to your Google Drive or a file</span></button>
+      <a class="tile" href="#about"><span class="t-title">About</span><span class="t-sub">Who made this, and how your data is handled</span></a>
+    </div>
+    <button id="btnInstall" class="primary install hidden">Install app</button>
+  </section>
+
+  <!-- Test Tracker -->
+  <section id="page-tracker" class="page hidden">
+    <div class="toolbar">
+      <a class="link" href="#home">← Home</a>
+      <div>
+        <button id="btnGrid" class="ghost">Questions</button>
+        <button id="btnKeys" class="ghost">Keys</button>
+        <button id="btnGemini" class="ghost">Gemini</button>
+      </div>
+    </div>
+    <!-- Setup -->
+    <section id="setup" class="card">
+      <p class="eyebrow">Setup</p>
+      <h2>Start a new session</h2>
+      <form id="setupForm">
+        <label class="full">
+          <span class="lbl">Topic name <em>Optional</em></span>
+          <input id="inTopic" type="text" maxlength="80" placeholder="e.g. Cardiology Set 3" autocomplete="off">
+        </label>
+        <label>
+          <span class="lbl">First question</span>
+          <input id="inFirst" type="number" min="0" value="1" required>
+        </label>
+        <label>
+          <span class="lbl">Number of questions</span>
+          <input id="inCount" type="number" min="1" placeholder="Open-ended">
+        </label>
+        <label>
+          <span class="lbl">Options per question</span>
+          <select id="inOptions">
+            <option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option>
+          </select>
+        </label>
+        <label>
+          <span class="lbl">Option style</span>
+          <select id="inStyle">
+            <option value="letters">A, B, C, D</option>
+            <option value="numbers">1, 2, 3, 4</option>
+            <option value="roman">I, II, III, IV</option>
+          </select>
+        </label>
+        <label>
+          <span class="lbl">Timing</span>
+          <select id="inTiming">
+            <option value="none">None</option>
+            <option value="stopwatch">Stopwatch</option>
+            <option value="timer">Timer</option>
+          </select>
+        </label>
+        <label id="minsWrap" class="hidden">
+          <span class="lbl">Timer minutes</span>
+          <input id="inMinutes" type="number" min="1" step="any" placeholder="e.g. 90">
+        </label>
+        <button type="submit" class="primary full">Start session</button>
+      </form>
+    </section>
+
+    <!-- Test -->
+    <section id="test" class="card hidden">
+      <div class="pbar hidden"><i id="pfill"></i></div>
+      <div class="bar">
+        <div class="bar-info">
+          <span id="topicLabel" class="topic"></span>
+          <span id="progress" class="muted small"></span>
+        </div>
+        <div id="clock" class="clock hidden">
+          <span id="clockTime">00:00</span>
+          <button id="btnClock" class="mini">Pause</button>
+        </div>
+      </div>
+
+      <div class="qwrap">
+        <span class="eyebrow">Question</span>
+        <strong id="qNum">1</strong>
+        <span id="qStatus" class="status"></span>
+      </div>
+
+      <div id="options" class="options"></div>
+      <button id="btnSkip" class="skip">Skip question</button>
+
+      <div class="nav">
+        <button id="btnPrev">← Previous</button>
+        <button id="btnNext">Next →</button>
+      </div>
+
+      <button id="btnFinish" class="primary finish">Finish test</button>
+      <div class="foot"><button class="link js-new">New session</button></div>
+    </section>
+
+    <!-- Finished -->
+    <section id="done" class="card hidden">
+      <p class="eyebrow">Test complete</p>
+      <h2 id="doneTitle">Test finished</h2>
+
+      <div class="stats">
+        <div><span id="stAnswered">0</span><small>Answered</small></div>
+        <div><span id="stSkipped">0</span><small>Skipped</small></div>
+        <div><span id="stNone">0</span><small>Not answered</small></div>
+        <div id="stTimeBox"><span id="stTime">0</span><small>Time</small></div>
+      </div>
+
+      <button id="btnCheck" class="primary big">Check answers against a key</button>
+
+      <div id="slowBox" class="hidden">
+        <div class="list-title">Slowest questions</div>
+        <div id="slowList" class="list"></div>
+      </div>
+
+      <label id="timeOpt" class="check">
+        <input type="checkbox" id="chkTime" checked>
+        <span>Include time in export</span>
+      </label>
+
+      <label class="check">
+        <input type="checkbox" id="chkQTime">
+        <span>Include time per question in export</span>
+      </label>
+
+      <div class="export-choices two">
+        <button id="btnPdf">Download PDF</button>
+        <button id="btnCopy">Copy to clipboard</button>
+      </div>
+
+      <div class="foot2">
+        <button id="btnBack" class="link">← Back to test</button>
+        <button class="link js-new">New session</button>
+      </div>
+    </section>
+
+    <!-- Answer key -->
+    <section id="review" class="card hidden">
+      <p class="eyebrow">Answer key</p>
+      <h2>Add the correct answers</h2>
+
+      <div class="drop">
+        <input type="file" id="keyFiles" accept="image/*,application/pdf" multiple hidden>
+        <button id="btnPick">Choose photos or a PDF</button>
+        <span id="fileInfo" class="muted small">No files selected</span>
+      </div>
+      <button id="btnExtract" class="primary full-btn">Read key with Gemini</button>
+      <p id="extractNote" class="muted small">Question numbers in the key should match yours. Always review the result below.</p>
+
+      <div class="divider"><span>Review and edit</span></div>
+      <div id="keyEditor" class="keyeditor"></div>
+
+      <button id="btnCompare" class="primary full-btn">Compare answers</button>
+      <div class="foot2">
+        <button id="btnBackDone" class="link">← Back</button>
+        <button id="btnClearKey" class="link">Clear key</button>
+      </div>
+    </section>
+
+    <!-- Results -->
+    <section id="results" class="card hidden">
+      <p class="eyebrow">Results</p>
+      <h2 id="resTitle">Your score</h2>
+
+      <div class="score">
+        <strong id="scoreMain">0 / 0</strong>
+        <span id="scoreSub" class="muted"></span>
+      </div>
+
+      <div class="stats">
+        <div><span id="rsCorrect">0</span><small>Correct</small></div>
+        <div><span id="rsWrong">0</span><small>Wrong</small></div>
+        <div><span id="rsMissed">0</span><small>Skipped / blank</small></div>
+        <div id="rsNoKeyBox"><span id="rsNoKey">0</span><small>No key</small></div>
+      </div>
+
+      <div id="wrongList"></div>
+
+      <label id="timeOptR" class="check">
+        <input type="checkbox" id="chkTimeR" checked>
+        <span>Include time in export</span>
+      </label>
+      <div class="export-choices two">
+        <button id="btnPdfR" class="primary">Download PDF</button>
+        <button id="btnCopyR">Copy to clipboard</button>
+      </div>
+
+      <div class="foot2">
+        <button id="btnEditKey" class="link">← Edit key</button>
+        <button id="btnBackDone2" class="link">Back to summary</button>
+      </div>
+    </section>
+
+  </section>
+
+  <!-- Focus & Notes -->
+  <section id="page-focus" class="page hidden">
+    <div class="toolbar"><a class="link" href="#home">← Home</a></div>
+    <div class="card">
+      <p class="eyebrow">Pomodoro</p>
+      <div class="pomo">
+        <span id="pomoPhase" class="chip on">Focus</span>
+        <strong id="pomoTime">25:00</strong>
+        <span class="muted small">Sessions today: <b id="pomoCount">0</b></span>
+      </div>
+      <div class="export-choices two">
+        <button id="btnPomo" class="primary">Start</button>
+        <button id="btnPomoReset">Reset</button>
+      </div>
+      <div class="pomo-set">
+        <label><span class="lbl">Focus minutes</span><input id="pomoWork" type="number" min="1" max="180" value="25"></label>
+        <label><span class="lbl">Break minutes</span><input id="pomoBreak" type="number" min="1" max="60" value="5"></label>
+        <button id="btnPomoSkip" class="mini">Skip phase</button>
+      </div>
+    </div>
+    <div class="card">
+      <p class="eyebrow">Notes</p>
+      <div class="notebar">
+        <select id="noteSel"></select>
+        <button id="btnNoteNew" class="mini">New</button>
+        <button id="btnNoteDel" class="mini">Delete</button>
+      </div>
+      <textarea id="noteText" placeholder="Write your notes here…"></textarea>
+      <p class="muted small">Saved automatically in this browser.</p>
+    </div>
+  </section>
+
+  <!-- Music -->
+  <section id="page-music" class="page hidden">
+    <div class="toolbar"><a class="link" href="#home">← Home</a></div>
+    <div class="card">
+      <p class="eyebrow">Ambience</p>
+      <h2>Ambient scenes</h2>
+      <p class="muted small">Tap a scene to play it on a loop. Play two or three together to make a mix.</p>
+      <div id="scenes" class="scenes"></div>
+      <label class="sleep"><span class="lbl">Sleep timer</span>
+        <select id="sleepSel">
+          <option value="0">Off</option><option value="15">15 minutes</option><option value="30">30 minutes</option>
+          <option value="60">1 hour</option><option value="90">90 minutes</option>
+        </select>
+      </label>
+      <p id="sleepNote" class="muted small"></p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">My music</p>
+      <h2>Your own files</h2>
+      <p class="muted small">Files you add stay on this device only. They are not uploaded anywhere.</p>
+      <input type="file" id="musicFiles" accept="audio/*" multiple hidden>
+      <button id="btnAddMusic" class="full-btn">Add music files</button>
+      <div class="player hidden" id="player">
+        <div id="nowPlaying" class="now">Nothing playing</div>
+        <div class="player-ctrl">
+          <button id="btnPrevT" class="mini">Prev</button>
+          <button id="btnPlayT" class="mini primary">Play</button>
+          <button id="btnNextT" class="mini">Next</button>
+          <input id="volT" type="range" min="0" max="1" step="0.05" value="0.8" aria-label="Volume">
+        </div>
+      </div>
+      <div id="trackList" class="list tracks"></div>
+    </div>
+    <div class="card">
+      <p class="eyebrow">YouTube</p>
+      <h2>Play from YouTube</h2>
+      <p class="muted small">Paste a video, live stream or playlist link. It plays inside the app through YouTube's own player, so YouTube's normal ads apply.</p>
+      <div class="yt-row">
+        <input id="ytUrl" type="text" placeholder="https://www.youtube.com/watch?v=…" autocomplete="off">
+        <button id="btnYt" class="primary">Load</button>
+      </div>
+      <div id="ytBox" class="yt hidden"></div>
+    </div>
+  </section>
+
+  <!-- About -->
+  <section id="page-about" class="page hidden">
+    <div class="toolbar"><a class="link" href="#home">← Home</a></div>
+    <div class="card">
+      <p class="eyebrow">About</p>
+      <h2>Hi, I'm [Your Name]</h2>
+      <p>[Write a short bio here: your college, what you study, and why you built ZeroCheck.]</p>
+      <div class="list-title">Contact</div>
+      <p class="muted">[Your email or Instagram handle]</p>
+      <div class="list-title">What ZeroCheck does</div>
+      <p class="muted">Track your answers during a practice test, time every question, check them against an answer key, and export the results. It also has a focus timer, notes, ambient sounds and a scientific calculator.</p>
+      <div class="list-title">Your data</div>
+      <p class="muted">Everything is saved in your own browser. Nothing is sent to me. If you use the Gemini feature, the key photos go to Google with your own API key. If you use Google backup, the file goes to your own Google Drive.</p>
+    </div>
+  </section>
+</main>
+
+<div id="dock" class="dock hidden">
+  <span id="dockMusic"></span>
+  <button id="dockStop" class="mini hidden">Stop</button>
+  <span id="dockPomo"></span>
+</div>
+<button id="btnExitFocus" class="mini exit-focus hidden">Exit focus mode</button>
+
+<!-- Question grid -->
+<dialog id="dlgGrid">
+  <div class="dlg-head">
+    <h2>Questions</h2>
+    <button class="link" data-close>Close</button>
+  </div>
+  <div class="filters">
+    <button data-filter="all" class="chip on">All</button>
+    <button data-filter="skipped" class="chip">Skipped</button>
+    <button data-filter="unanswered" class="chip">Not answered</button>
+  </div>
+  <div id="grid" class="grid"></div>
+  <p class="muted small">Filled = answered. Dashed = skipped. Plain = not visited.</p>
+</dialog>
+
+<!-- Key mapping -->
+<dialog id="dlgKeys">
+  <div class="dlg-head">
+    <h2>Key mapping</h2>
+    <button class="link" data-close>Close</button>
+  </div>
+  <p class="muted small">Click an action, then press the key you want. Numpad keys work.</p>
+  <div id="keyList" class="keylist"></div>
+  <button id="btnResetKeys" class="link">Reset to defaults</button>
+</dialog>
+
+<!-- Gemini settings -->
+<dialog id="dlgGemini">
+  <div class="dlg-head">
+    <h2>Gemini settings</h2>
+    <button class="link" data-close>Close</button>
+  </div>
+  <p class="muted small">Used only to read answer-key photos. Your key is saved in this browser only. Photos you upload are sent to Google.</p>
+  <div class="fields">
+    <label>
+      <span class="lbl">Gemini API key</span>
+      <input id="gemKey" type="password" autocomplete="off" placeholder="Paste your key">
+    </label>
+    <label>
+      <span class="lbl">Model <em>Leave empty for Auto</em></span>
+      <input id="gemModel" type="text" list="modelList" placeholder="Auto (recommended)" autocomplete="off">
+      <datalist id="modelList"></datalist>
+    </label>
+  </div>
+  <div class="row">
+    <button id="btnTestKey">Test connection</button>
+    <button id="btnSaveKey" class="primary">Save</button>
+  </div>
+  <p id="gemMsg" class="muted small"></p>
+  <div class="row-links">
+    <a class="link" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Get a free key from Google AI Studio →</a>
+    <button id="btnRemoveKey" class="link">Remove saved key</button>
+  </div>
+</dialog>
+
+<!-- Themes -->
+<dialog id="dlgThemes">
+  <div class="dlg-head">
+    <h2>Themes</h2>
+    <button class="link" data-close>Close</button>
+  </div>
+  <div id="themeList" class="themes"></div>
+</dialog>
+
+<!-- Calculator -->
+<dialog id="dlgCalc">
+  <div class="dlg-head">
+    <h2>Calculator</h2>
+    <button class="link" data-close>Close</button>
+  </div>
+  <input id="calcIn" type="text" inputmode="none" autocomplete="off" spellcheck="false" placeholder="0">
+  <div id="calcOut" class="calc-out">&nbsp;</div>
+  <div class="calc-top"><button id="calcMode" class="mini">DEG</button><span class="muted small">Type or tap. Enter to calculate.</span></div>
+  <div id="calcKeys" class="calc-keys"></div>
+</dialog>
+
+<!-- Backup -->
+<dialog id="dlgBackup">
+  <div class="dlg-head">
+    <h2>Backup &amp; restore</h2>
+    <button class="link" data-close>Close</button>
+  </div>
+  <p class="muted small">Your data lives in this browser. Back it up to move it to another device. Your Gemini key is never included.</p>
+  <div class="list-title">Google Drive</div>
+  <div class="row">
+    <button id="btnDriveBackup" class="primary">Back up to Google</button>
+    <button id="btnDriveRestore">Restore from Google</button>
+  </div>
+  <p class="muted small">Saved in your own Drive as "ZeroCheck Backup.json". ZeroCheck can only see that file.</p>
+  <div class="list-title">File</div>
+  <div class="row">
+    <button id="btnExportFile">Download backup file</button>
+    <button id="btnImportFile">Import backup file</button>
+  </div>
+  <input type="file" id="importFile" accept="application/json,.json" hidden>
+  <p id="bkMsg" class="muted small"></p>
+</dialog>
+
+<div id="toast" class="toast" role="status"></div>
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="config.js"></script>
+<script src="tracker.js"></script>
+<script src="app.js"></script>
+<script src="focus.js"></script>
+<script src="music.js"></script>
+<script src="calc.js"></script>
+</body>
+</html>
