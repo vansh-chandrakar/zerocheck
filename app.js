@@ -1,7 +1,28 @@
 (() => {
   const $ = (s) => document.querySelector(s);
   const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch { return d; } };
-  const PAGES = ['home', 'tracker', 'focus', 'music', 'about'];
+  const PAGES = ['home', 'tracker', 'exam', 'focus', 'music', 'about'];
+
+  /* ---------- welcome screen (shown once each time the app is opened) ---------- */
+  const welcome = $('#welcome');
+  function enter() {
+    try { sessionStorage.setItem('zc_welcomed', '1'); } catch {}
+    document.body.classList.remove('welcoming');
+    welcome.classList.add('hide');
+    setTimeout(() => welcome.remove(), 550);
+    if (location.hash !== '#home') location.hash = '#home';
+    window.scrollTo({ top: 0 });
+  }
+  if (document.documentElement.classList.contains('seen')) {
+    document.body.classList.remove('welcoming');
+    welcome.remove();
+  } else {
+    welcome.addEventListener('click', enter);
+    document.addEventListener('keydown', (e) => {
+      if (document.body.classList.contains('welcoming') && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); enter(); }
+    });
+    $('#btnEnter').focus({ preventScroll: true });
+  }
 
   /* ---------- pages ---------- */
   function show() {

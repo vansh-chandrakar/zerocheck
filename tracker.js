@@ -4,11 +4,11 @@
   const LETTERS = 'ABCDEF';
   const DEFAULT_KEYS = {
     o0: 'Digit1', o1: 'Digit2', o2: 'Digit3', o3: 'Digit4', o4: 'Digit5', o5: 'Digit6',
-    skip: 'KeyS', prev: 'ArrowLeft', next: 'ArrowRight'
+    skip: 'KeyS', flag: 'KeyF', prev: 'ArrowLeft', next: 'ArrowRight'
   };
   const KEY_NAMES = {
     o0: 'Option 1', o1: 'Option 2', o2: 'Option 3', o3: 'Option 4', o4: 'Option 5', o5: 'Option 6',
-    skip: 'Skip', prev: 'Previous', next: 'Next'
+    skip: 'Skip', flag: 'Flag for review', prev: 'Previous', next: 'Next'
   };
   const DEFAULT_MODEL = ''; // empty = Auto (prefers Flash-Lite, which has the highest free daily limit)
   const API = 'https://generativelanguage.googleapis.com/v1beta';
@@ -33,6 +33,9 @@
     S.alerted = !!S.alerted;
     S.key = S.key || {};
     S.times = S.times || {};
+    S.flags = S.flags || {};
+    S.rules = S.rules || null;
+    S.sections = S.sections || null;
   }
 
   const persist = () => {
@@ -47,8 +50,15 @@
   const lastQ = () => (S.count ? S.first + S.count - 1 : null);
   const maxSeen = () => Math.max(S.current, ...Object.keys(S.answers).map(Number));
   const endQ = () => (lastQ() !== null ? lastQ() : maxSeen());
-  const valueText = (v) => (v === undefined ? 'Not answered' : v === 'skip' ? 'Skipped' : label(v));
+  const secOf = (q) => (S.sections ? S.sections.find((s) => q >= s.from && q <= s.to) || null : null);
+  const typeOf = (q) => (secOf(q) ? secOf(q).type : 'single');
+  const subjectOf = (q) => (secOf(q) ? secOf(q).subject : 'All');
+  const ansText = (v) => v === undefined ? 'Not answered' : v === 'skip' ? 'Skipped'
+    : Array.isArray(v) ? v.map(label).join(', ') : (typeof v === 'object' ? v.n : label(v));
+  const keyText = (q, k) => typeOf(q) === 'numeric' ? String(k) : Array.isArray(k) ? k.map(label).join(', ') : label(k);
   const optionList = () => Array.from({ length: S.options }, (_, i) => label(i)).join(', ');
+  const fmtM = (n) => String(Math.round(n * 100) / 100);
+  const flaggedList = () => Object.keys(S.flags).filter((q) => S.flags[q]).map(Number).sort((a, b) => a - b);
   const counts = () => {
     const vals = Object.values(S.answers);
     const answered = vals.filter((v) => v !== 'skip').length;
@@ -150,43 +160,73 @@
     }
 
     const c = counts();
+    const nFlag = flaggedList().length;
     const total = lastQ() !== null ? ` / ${S.count}` : '';
     $('#topicLabel').textContent = S.topic;
     $('#topicLabel').classList.toggle('hidden', !S.topic);
-    $('#progress').textContent = `Answered ${c.answered}${total} · Skipped ${c.skipped}`;
-    const pb = $('.pbar');
-    pb.classList.toggle('hidden', !S.count);
+    $('#progress').textContent = `Answered ${c.answered}${total} · Skipped ${c.skipped}` + (nFlag ? ` · Flagged ${nFlag}` : '');
+    $('.pbar').classList.toggle('hidden', !S.count);
     if (S.count) $('#pfill').style.width = Math.min(100, ((c.answered + c.skipped) / S.count) * 100) + '%';
     $('#qNum').textContent = S.current;
 
-    const v = S.answers[S.current];
-    $('#qStatus').textContent = v === undefined ? 'Not answered yet' : v === 'skip' ? 'Skipped' : `Your answer: ${label(v)}`;
+    const sec = secOf(S.current), t = typeOf(S.current), v = S.answers[S.current];
+
+    // section chips (Exam Zone)
+    const bar = $('#secBar');
+    bar.classList.toggle('hidden', !S.sections);
+    if (S.sections) {
+      bar.innerHTML = '';
+      S.sections.forEach((s) => {
+        const b = document.createElement('button');
+        b.textContent = s.name;
+        if (s === sec) b.classList.add('on');
+        b.addEventListener('click', () => go(s.from));
+        bar.appendChild(b);
+      });
+      const on = bar.querySelector('.on');
+      if (on) bar.scrollLeft = on.offsetLeft - bar.clientWidth / 2 + on.clientWidth / 2;
+    }
+
+    $('#qStatus').textContent = v === undefined ? 'Not answered yet' : v === 'skip' ? 'Skipped' : `Your answer: ${ansText(v)}`;
+    $('#qHint').textContent = t === 'multi' ? 'One or more options can be correct' : t === 'numeric' ? 'Type a number' : '';
+    $('#btnFlag').classList.toggle('on', !!S.flags[S.current]);
+    $('#btnFlag').textContent = S.flags[S.current] ? '⚑ Flagged' : '⚑ Flag';
 
     const box = $('#options');
+    box.classList.toggle('hidden', t === 'numeric');
+    $('#numBox').classList.toggle('hidden', t !== 'numeric');
     box.innerHTML = '';
-    for (let i = 0; i < S.options; i++) {
-      const b = document.createElement('button');
-      b.textContent = label(i);
-      if (v === i) b.classList.add('selected');
-      const hint = keys['o' + i];
-      if (hint) {
-        const k = document.createElement('span');
-        k.className = 'kbd';
-        k.textContent = pretty(hint).replace('Numpad', 'Num');
-        b.appendChild(k);
+    if (t === 'numeric') {
+      $('#numIn').value = v && typeof v === 'object' && !Array.isArray(v) ? v.n : '';
+      if (!matchMedia('(hover: none)').matches) $('#numIn').focus({ preventScroll: true });
+    } else {
+      for (let i = 0; i < S.options; i++) {
+        const b = document.createElement('button');
+        b.textContent = label(i);
+        if (t === 'multi' ? Array.isArray(v) && v.includes(i) : v === i) b.classList.add('selected');
+        const hint = keys['o' + i];
+        if (hint) {
+          const k = document.createElement('span');
+          k.className = 'kbd';
+          k.textContent = pretty(hint).replace('Numpad', 'Num');
+          b.appendChild(k);
+        }
+        b.addEventListener('click', () => answer(i));
+        box.appendChild(b);
       }
-      b.addEventListener('click', () => answer(i));
-      box.appendChild(b);
+      if (S.options % 2 === 1) box.lastChild.style.gridColumn = '1 / -1';
     }
-    if (S.options % 2 === 1) box.lastChild.style.gridColumn = '1 / -1';
     updateClock();
   }
 
   function renderDone() {
     const c = counts();
+    const nFlag = flaggedList().length;
     $('#stAnswered').textContent = c.answered;
     $('#stSkipped').textContent = c.skipped;
     $('#stNone').textContent = c.notAnswered;
+    $('#stFlag').textContent = nFlag;
+    $('#stFlagBox').classList.toggle('hidden', !nFlag);
     $('#doneTitle').textContent = S.topic || 'Test finished';
     const hasTime = S.mode !== 'none';
     $('#stTimeBox').classList.toggle('hidden', !hasTime);
@@ -212,12 +252,51 @@
     if (lastQ() !== null && S.current >= lastQ()) { persist(); render(); return toast('Last question reached'); }
     go(S.current + 1);
   }
-  function answer(i) { flushTime(); S.answers[S.current] = i; advance(); }
+  function answer(i) {
+    flushTime();
+    const t = typeOf(S.current);
+    if (t === 'single') { S.answers[S.current] = i; advance(); }
+    else if (t === 'multi') {
+      const a = Array.isArray(S.answers[S.current]) ? S.answers[S.current].slice() : [];
+      const p = a.indexOf(i);
+      if (p >= 0) a.splice(p, 1); else a.push(i);
+      a.sort((x, y) => x - y);
+      if (a.length) S.answers[S.current] = a; else delete S.answers[S.current];
+      persist(); render();
+    }
+  }
+  function saveNumeric() {
+    const raw = $('#numIn').value.trim().replace(',', '.');
+    if (raw === '' || isNaN(Number(raw))) return toast('Enter a number');
+    flushTime();
+    S.answers[S.current] = { n: String(Number(raw)) };
+    advance();
+  }
   function skip() { flushTime(); S.answers[S.current] = 'skip'; advance(); }
+  function clearAnswer() { delete S.answers[S.current]; persist(); render(); }
+  function toggleFlag() {
+    if (S.flags[S.current]) delete S.flags[S.current]; else S.flags[S.current] = true;
+    persist(); render();
+  }
 
-  /* ---------- setup ---------- */
+  /* ---------- sessions / setup ---------- */
+  function startSession(cfg) {
+    S = {
+      first: cfg.first, count: cfg.count || null, options: cfg.options, style: cfg.style,
+      current: cfg.first, answers: {}, key: {}, times: {}, flags: {},
+      topic: cfg.topic || '', mode: cfg.mode || 'none', limit: cfg.limit || 0,
+      elapsed: 0, startedAt: cfg.mode && cfg.mode !== 'none' ? Date.now() : null,
+      finished: false, alerted: false, rules: cfg.rules || null, sections: cfg.sections || null
+    };
+    view = 'done'; files = []; qEnter = Date.now();
+    persist(); render();
+  }
+
   $('#inTiming').addEventListener('change', (e) => {
     $('#minsWrap').classList.toggle('hidden', e.target.value !== 'timer');
+  });
+  $('#inMarking').addEventListener('change', (e) => {
+    $('#markWrap').classList.toggle('hidden', e.target.value !== 'custom');
   });
 
   $('#setupForm').addEventListener('submit', (e) => {
@@ -232,27 +311,17 @@
       if (!(m > 0)) return toast('Enter the timer minutes');
       limit = Math.round(m * 60);
     }
-    S = {
-      first,
-      count: isNaN(count) ? null : count,
-      options: parseInt($('#inOptions').value, 10),
-      style: $('#inStyle').value,
-      current: first,
-      answers: {},
-      key: {},
-      times: {},
-      topic: $('#inTopic').value.trim(),
-      mode, limit,
-      elapsed: 0,
-      startedAt: mode === 'none' ? null : Date.now(),
-      finished: false,
-      alerted: false
-    };
-    view = 'done';
-    files = [];
-    qEnter = Date.now();
-    persist();
-    render();
+    let rules = null;
+    if ($('#inMarking').value === 'custom') {
+      const c = parseFloat($('#inMarkC').value), w = Math.abs(parseFloat($('#inMarkW').value)), u = parseFloat($('#inMarkU').value);
+      if (isNaN(c) || isNaN(w)) return toast('Enter the marks for correct and wrong');
+      rules = { single: { c, w }, skip: isNaN(u) ? 0 : u };
+    }
+    startSession({
+      first, count: isNaN(count) ? null : count,
+      options: parseInt($('#inOptions').value, 10), style: $('#inStyle').value,
+      topic: $('#inTopic').value.trim(), mode, limit, rules
+    });
   });
 
   document.querySelectorAll('.js-new').forEach((b) => b.addEventListener('click', () => {
@@ -264,13 +333,23 @@
   }));
 
   $('#btnSkip').addEventListener('click', skip);
+  $('#btnFlag').addEventListener('click', toggleFlag);
+  $('#btnClear').addEventListener('click', clearAnswer);
+  $('#btnNumSave').addEventListener('click', saveNumeric);
+  $('#btnNumNeg').addEventListener('click', () => {
+    const el = $('#numIn');
+    el.value = el.value.startsWith('-') ? el.value.slice(1) : '-' + el.value;
+    el.focus({ preventScroll: true });
+  });
+  $('#numIn').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); saveNumeric(); } });
   $('#btnPrev').addEventListener('click', () => go(S.current - 1));
   $('#btnNext').addEventListener('click', () => go(S.current + 1));
 
   /* ---------- finish ---------- */
   $('#btnFinish').addEventListener('click', () => {
     const c = counts();
-    if (!confirm(`Finish the test?\n\nNot answered: ${c.notAnswered}\nSkipped: ${c.skipped}`)) return;
+    const nFlag = flaggedList().length;
+    if (!confirm(`Finish the test?\n\nNot answered: ${c.notAnswered}\nSkipped: ${c.skipped}` + (nFlag ? `\nFlagged for review: ${nFlag}` : ''))) return;
     flushTime();
     if (S.startedAt) { S.elapsed = elapsedMs(); S.startedAt = null; }
     S.finished = true;
@@ -302,20 +381,54 @@
     const ed = $('#keyEditor');
     ed.innerHTML = '';
     for (let q = S.first; q <= endQ(); q++) {
-      const row = document.createElement('label');
-      row.className = 'krow' + (S.key[q] !== undefined ? ' set' : '');
+      const t = typeOf(q);
+      const row = document.createElement('div');
+      row.className = 'krow' + (t === 'multi' ? ' wide' : '');
+      const mark = () => row.classList.toggle('set', S.key[q] !== undefined);
       const num = document.createElement('span');
       num.textContent = q;
-      const sel = document.createElement('select');
-      sel.appendChild(new Option('—', ''));
-      for (let i = 0; i < S.options; i++) sel.appendChild(new Option(label(i), String(i)));
-      sel.value = S.key[q] !== undefined ? String(S.key[q]) : '';
-      sel.addEventListener('change', () => {
-        if (sel.value === '') delete S.key[q]; else S.key[q] = parseInt(sel.value, 10);
-        row.classList.toggle('set', sel.value !== '');
-        persist();
-      });
-      row.append(num, sel);
+      row.appendChild(num);
+      if (t === 'single') {
+        const sel = document.createElement('select');
+        sel.appendChild(new Option('—', ''));
+        for (let i = 0; i < S.options; i++) sel.appendChild(new Option(label(i), String(i)));
+        sel.value = S.key[q] !== undefined ? String(S.key[q]) : '';
+        sel.addEventListener('change', () => {
+          if (sel.value === '') delete S.key[q]; else S.key[q] = parseInt(sel.value, 10);
+          mark(); persist();
+        });
+        row.appendChild(sel);
+      } else if (t === 'multi') {
+        const wrap = document.createElement('div');
+        wrap.className = 'kchips';
+        const cur = () => (Array.isArray(S.key[q]) ? S.key[q] : []);
+        for (let i = 0; i < S.options; i++) {
+          const b = document.createElement('button');
+          b.textContent = label(i);
+          if (cur().includes(i)) b.classList.add('on');
+          b.addEventListener('click', () => {
+            const a = cur().slice(), p = a.indexOf(i);
+            if (p >= 0) a.splice(p, 1); else a.push(i);
+            a.sort((x, y) => x - y);
+            if (a.length) S.key[q] = a; else delete S.key[q];
+            b.classList.toggle('on', a.includes(i));
+            mark(); persist();
+          });
+          wrap.appendChild(b);
+        }
+        row.appendChild(wrap);
+      } else {
+        const inp = document.createElement('input');
+        inp.type = 'text'; inp.inputMode = 'decimal'; inp.placeholder = 'number';
+        inp.value = S.key[q] !== undefined ? S.key[q] : '';
+        inp.addEventListener('input', () => {
+          const v = inp.value.trim().replace(',', '.');
+          if (v === '' || isNaN(Number(v))) delete S.key[q]; else S.key[q] = Number(v);
+          mark(); persist();
+        });
+        row.appendChild(inp);
+      }
+      mark();
       ed.appendChild(row);
     }
     updateFileInfo();
@@ -426,6 +539,21 @@
     throw new Error('No model worked. ' + tried.join(' | '));
   }
 
+  function keyPrompt() {
+    const first = S.first, last = endQ();
+    const groups = S.sections
+      ? S.sections.filter((s) => s.from <= last).map((s) => ({ type: s.type, from: s.from, to: Math.min(s.to, last) }))
+      : [{ type: 'single', from: first, to: last }];
+    const rule = { single: 'single correct: report ONE position number', multi: 'multiple correct: report an ARRAY of ALL correct position numbers, e.g. [1,3]', numeric: 'numerical answer: report the number' };
+    return `You are reading an answer key for a test. The attached file(s) contain the key. ` +
+      `Extract the correct answer for each question number from ${first} to ${last}. ` +
+      `Each question has ${S.options} options. The key may label options as letters (A, B, C...), numbers (1, 2, 3...) or roman numerals (I, II, III...). ` +
+      `Always report options as position numbers from 1 to ${S.options} (first option = 1, second = 2, and so on). ` +
+      `Question types:\n` + groups.map((g) => `- Questions ${g.from} to ${g.to}: ${rule[g.type]}`).join('\n') + '\n' +
+      `Use only what is printed in the key. If a question is missing, unreadable or ambiguous, use null. Never guess. ` +
+      `Respond with JSON only, in this shape: {"answers": {"${first}": 2, "${first + 1}": [1, 3], "${first + 2}": 12.5, "${first + 3}": null}}`;
+  }
+
   $('#btnExtract').addEventListener('click', async () => {
     if (!gem.key) { toast('Add your Gemini key first'); return openGemini(); }
     if (!files.length) return toast('Choose photos or a PDF first');
@@ -434,18 +562,7 @@
     btn.disabled = true;
     btn.textContent = 'Reading…';
     try {
-      const parts = [];
-      const first = S.first, last = endQ();
-      parts.push({
-        text:
-          `You are reading an answer key for a multiple-choice test. The attached file(s) contain the key. ` +
-          `Extract the correct option for each question number from ${first} to ${last}. ` +
-          `The test has ${S.options} options per question. The key may label options as letters (A, B, C...), numbers (1, 2, 3...) ` +
-          `or roman numerals (I, II, III...). Always report the option as its position number from 1 to ${S.options} ` +
-          `(first option = 1, second = 2, and so on). Use only what is printed in the key. If a question is missing, ` +
-          `unreadable or ambiguous, use null. Never guess. Respond with JSON only, in this shape: ` +
-          `{"answers": {"${first}": 2, "${first + 1}": null}}`
-      });
+      const parts = [{ text: keyPrompt() }];
       for (const f of files) {
         const p = await fileToPart(f);
         parts.push({ inline_data: { mime_type: p.mime, data: p.data } });
@@ -454,11 +571,22 @@
       const text = (data.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('')
         .replace(/```json|```/g, '').trim();
       const ans = JSON.parse(text).answers || {};
+      const first = S.first, last = endQ();
       let found = 0;
       for (const [q, v] of Object.entries(ans)) {
         const qn = parseInt(q, 10);
-        const idx = toIdx(v);
-        if (qn >= first && qn <= last && idx !== null) { S.key[qn] = idx; found++; }
+        if (!(qn >= first && qn <= last)) continue;
+        const t = typeOf(qn);
+        if (t === 'single') {
+          const idx = toIdx(Array.isArray(v) ? v[0] : v);
+          if (idx !== null) { S.key[qn] = idx; found++; }
+        } else if (t === 'multi') {
+          const arr = [...new Set((Array.isArray(v) ? v : [v]).map(toIdx).filter((x) => x !== null))].sort((a, b) => a - b);
+          if (arr.length) { S.key[qn] = arr; found++; }
+        } else {
+          const n = parseFloat(v);
+          if (isFinite(n)) { S.key[qn] = n; found++; }
+        }
       }
       persist();
       renderReview();
@@ -514,18 +642,47 @@
   });
 
   /* ---------- results ---------- */
-  function compute() {
-    const wrong = [], missed = [];
-    let correct = 0, noKey = 0;
-    for (let q = S.first; q <= endQ(); q++) {
-      const k = S.key[q], a = S.answers[q];
-      if (k === undefined) { noKey++; continue; }
-      if (a === undefined || a === 'skip') missed.push({ q, a, k });
-      else if (a === k) correct++;
-      else wrong.push({ q, a, k });
+  // Marks for one question. Returns { st: correct | wrong | partial | missed | nokey, m: marks }
+  function scoreQ(q) {
+    const k = S.key[q], a = S.answers[q], t = typeOf(q);
+    if (k === undefined) return { st: 'nokey', m: 0 };
+    const R = S.rules, r = R ? (R[t] || R.single) : null;
+    if (a === undefined || a === 'skip') return { st: 'missed', m: R ? (R.skip || 0) : 0 };
+    let st;
+    let right = 0;
+    if (t === 'single') st = a === k ? 'correct' : 'wrong';
+    else if (t === 'numeric') {
+      const x = a && typeof a === 'object' && !Array.isArray(a) ? Number(a.n) : NaN;
+      st = Math.abs(x - k) <= 1e-9 * Math.max(1, Math.abs(k)) ? 'correct' : 'wrong';
+    } else {
+      const A = Array.isArray(a) ? a : [], K = Array.isArray(k) ? k : [k];
+      right = A.filter((x) => K.includes(x)).length;
+      if (A.some((x) => !K.includes(x))) st = 'wrong';
+      else st = right === K.length ? 'correct' : 'partial';
     }
-    const total = correct + wrong.length + missed.length;
-    return { correct, wrong, missed, noKey, total, pct: total ? Math.round((correct / total) * 100) : 0 };
+    let m = 0;
+    if (r) m = st === 'correct' ? r.c : st === 'wrong' ? -r.w : (right * (r.p || 0));
+    return { st, m };
+  }
+
+  function compute() {
+    const wrong = [], partial = [], missed = [], subj = {};
+    let correct = 0, noKey = 0, marks = 0, max = 0;
+    for (let q = S.first; q <= endQ(); q++) {
+      const res = scoreQ(q);
+      if (res.st === 'nokey') { noKey++; continue; }
+      const t = typeOf(q), R = S.rules, r = R ? (R[t] || R.single) : null, name = subjectOf(q);
+      const sj = subj[name] || (subj[name] = { name, correct: 0, wrong: 0, partial: 0, missed: 0, marks: 0, max: 0 });
+      if (r) { max += r.c; sj.max += r.c; }
+      marks += res.m; sj.marks += res.m;
+      const item = { q, a: S.answers[q], k: S.key[q] };
+      if (res.st === 'correct') { correct++; sj.correct++; }
+      else if (res.st === 'wrong') { wrong.push(item); sj.wrong++; }
+      else if (res.st === 'partial') { partial.push(item); sj.partial++; }
+      else { missed.push(item); sj.missed++; }
+    }
+    const total = correct + wrong.length + partial.length + missed.length;
+    return { correct, wrong, partial, missed, noKey, total, marks, max, pct: total ? Math.round((correct / total) * 100) : 0, subjects: Object.values(subj) };
   }
 
   function listBlock(title, items, fn) {
@@ -547,31 +704,38 @@
   function renderResults() {
     const r = compute();
     $('#resTitle').textContent = S.topic || 'Your score';
-    $('#scoreMain').textContent = `${r.correct} / ${r.total}`;
-    $('#scoreSub').textContent = `${r.pct}% correct`;
+    $('#scoreMain').textContent = S.rules ? `${fmtM(r.marks)} / ${fmtM(r.max)}` : `${r.correct} / ${r.total}`;
+    $('#scoreSub').textContent = S.rules ? `${r.correct} of ${r.total} questions fully correct (${r.pct}%)` : `${r.pct}% correct`;
     $('#rsCorrect').textContent = r.correct;
     $('#rsWrong').textContent = r.wrong.length;
     $('#rsMissed').textContent = r.missed.length;
+    $('#rsPartial').textContent = r.partial.length;
+    $('#rsPartialBox').classList.toggle('hidden', r.partial.length === 0);
     $('#rsNoKey').textContent = r.noKey;
     $('#rsNoKeyBox').classList.toggle('hidden', r.noKey === 0);
     $('#timeOptR').classList.toggle('hidden', S.mode === 'none');
 
+    const sb = $('#subjList');
+    $('#subjBox').classList.toggle('hidden', r.subjects.length < 2);
+    sb.innerHTML = r.subjects.map((s) =>
+      `<div class="item"><b>${s.name}</b><span class="pair">${S.rules ? `<em>${fmtM(s.marks)} / ${fmtM(s.max)}</em>` : ''}${s.correct} right · ${s.wrong} wrong · ${s.missed} skipped</span></div>`).join('');
+
     const box = $('#wrongList');
     box.innerHTML = '';
-    const a = listBlock('Wrong', r.wrong, (i) =>
-      `<b>Q${i.q}</b><span class="pair">You <em>${label(i.a)}</em> Correct <em>${label(i.k)}</em></span>`);
-    const b = listBlock('Skipped or blank', r.missed, (i) =>
-      `<b>Q${i.q}</b><span class="pair">${i.a === 'skip' ? 'Skipped' : 'Blank'} Correct <em>${label(i.k)}</em></span>`);
-    if (a) box.appendChild(a);
-    if (b) box.appendChild(b);
-    if (!a && !b) box.innerHTML = '<p class="muted small" style="text-align:center">Nothing missed. Well done.</p>';
+    const blocks = [
+      listBlock('Wrong', r.wrong, (i) => `<b>Q${i.q}</b><span class="pair">You <em>${ansText(i.a)}</em> Correct <em>${keyText(i.q, i.k)}</em></span>`),
+      listBlock('Partially correct', r.partial, (i) => `<b>Q${i.q}</b><span class="pair">You <em>${ansText(i.a)}</em> Correct <em>${keyText(i.q, i.k)}</em></span>`),
+      listBlock('Skipped or blank', r.missed, (i) => `<b>Q${i.q}</b><span class="pair">${i.a === 'skip' ? 'Skipped' : 'Blank'} Correct <em>${keyText(i.q, i.k)}</em></span>`)
+    ].filter(Boolean);
+    blocks.forEach((b) => box.appendChild(b));
+    if (!blocks.length) box.innerHTML = '<p class="muted small" style="text-align:center">Nothing missed. Well done.</p>';
   }
 
   /* ---------- export ---------- */
   function buildRows() {
     const rows = [];
     const withT = $('#chkQTime').checked;
-    for (let q = S.first; q <= endQ(); q++) rows.push([q, valueText(S.answers[q]) + (withT && S.times[q] ? ` (${fmt(S.times[q] / 1000)})` : '')]);
+    for (let q = S.first; q <= endQ(); q++) rows.push([q, ansText(S.answers[q]) + (withT && S.times[q] ? ` (${fmt(S.times[q] / 1000)})` : '')]);
     return rows;
   }
   function timeLine(checkId) {
@@ -613,12 +777,13 @@
 
   $('#btnCopy').addEventListener('click', () => {
     const tl = timeLine('#chkTime');
+    const fl = flaggedList();
     copyText(
       (S.topic ? `Topic: ${S.topic}\n` : '') +
       `Questions: ${S.first} to ${endQ()}\nOptions: ${optionList()}\n` +
       (tl ? tl + '\n' : '') + '\n' +
       buildRows().map(([q, v]) => `${q}: ${v}`).join('\n') +
-      `\n\n${summaryLine()}`
+      `\n\n${summaryLine()}` + (fl.length ? `\nFlagged for review: ${fl.join(', ')}` : '')
     );
   });
 
@@ -633,6 +798,8 @@
     doc.text(`Questions ${S.first} to ${endQ()}  |  Options: ${optionList()}  |  ${summaryLine()}`, 15, y);
     const tl = timeLine('#chkTime');
     if (tl) { y += 5; doc.text(tl, 15, y); }
+    const fl = flaggedList();
+    if (fl.length) { y += 5; doc.text(`Flagged for review: ${fl.join(', ')}`.slice(0, 150), 15, y); }
     doc.setTextColor(0);
     doc.setFontSize(11);
     const startY = y + 10;
@@ -644,18 +811,28 @@
     doc.save(`${fileSafe()}_${S.first}-${endQ()}.pdf`);
   });
 
-  function resultsText(r) {
-    const tl = timeLine('#chkTimeR');
-    let t = (S.topic ? `Topic: ${S.topic}\n` : '') +
-      `Questions: ${S.first} to ${endQ()}\n` +
-      `Score: ${r.correct} / ${r.total} (${r.pct}%)\n` +
-      `Correct: ${r.correct} | Wrong: ${r.wrong.length} | Skipped or blank: ${r.missed.length}` +
-      (r.noKey ? ` | No key: ${r.noKey}` : '') + '\n' + (tl ? tl + '\n' : '');
-    if (r.wrong.length) t += '\nWrong answers:\n' + r.wrong.map((i) => `${i.q}: You ${label(i.a)}, correct ${label(i.k)}`).join('\n') + '\n';
-    if (r.missed.length) t += '\nSkipped or blank:\n' + r.missed.map((i) => `${i.q}: ${i.a === 'skip' ? 'skipped' : 'blank'}, correct ${label(i.k)}`).join('\n') + '\n';
-    return t.trim();
+  function resultsLines(r) {
+    const out = [];
+    if (r.subjects.length > 1) {
+      out.push(['By subject', true]);
+      r.subjects.forEach((s) => out.push([`${s.name}: ${S.rules ? fmtM(s.marks) + ' / ' + fmtM(s.max) + ' marks, ' : ''}${s.correct} right, ${s.wrong} wrong, ${s.missed} skipped`, false]));
+    }
+    if (r.wrong.length) { out.push([`Wrong answers (${r.wrong.length})`, true]); r.wrong.forEach((i) => out.push([`${i.q}: You ${ansText(i.a)}, correct ${keyText(i.q, i.k)}`, false])); }
+    if (r.partial.length) { out.push([`Partially correct (${r.partial.length})`, true]); r.partial.forEach((i) => out.push([`${i.q}: You ${ansText(i.a)}, correct ${keyText(i.q, i.k)}`, false])); }
+    if (r.missed.length) { out.push([`Skipped or blank (${r.missed.length})`, true]); r.missed.forEach((i) => out.push([`${i.q}: ${i.a === 'skip' ? 'skipped' : 'blank'}, correct ${keyText(i.q, i.k)}`, false])); }
+    return out;
   }
-  $('#btnCopyR').addEventListener('click', () => copyText(resultsText(compute())));
+  const resultsHead = (r) =>
+    (S.rules ? `Marks: ${fmtM(r.marks)} / ${fmtM(r.max)}\n` : `Score: ${r.correct} / ${r.total} (${r.pct}%)\n`) +
+    `Correct: ${r.correct} | Wrong: ${r.wrong.length}` + (r.partial.length ? ` | Partial: ${r.partial.length}` : '') +
+    ` | Skipped or blank: ${r.missed.length}` + (r.noKey ? ` | No key: ${r.noKey}` : '');
+
+  $('#btnCopyR').addEventListener('click', () => {
+    const r = compute(), tl = timeLine('#chkTimeR');
+    let t = (S.topic ? `Topic: ${S.topic}\n` : '') + `Questions: ${S.first} to ${endQ()}\n` + resultsHead(r) + '\n' + (tl ? tl + '\n' : '');
+    resultsLines(r).forEach(([txt, head]) => { t += (head ? '\n' : '') + txt + (head ? ':\n' : '\n'); });
+    copyText(t.trim());
+  });
 
   $('#btnPdfR').addEventListener('click', () => {
     const r = compute();
@@ -663,31 +840,23 @@
     if (!p) return;
     const { doc } = p;
     let y = p.y + 7;
-    doc.text(`Questions ${S.first} to ${endQ()}  |  Correct: ${r.correct}  Wrong: ${r.wrong.length}  Skipped or blank: ${r.missed.length}` + (r.noKey ? `  No key: ${r.noKey}` : ''), 15, y);
+    doc.text(`Questions ${S.first} to ${endQ()}  |  ${resultsHead(r).split('\n').pop()}`, 15, y);
     const tl = timeLine('#chkTimeR');
     if (tl) { y += 5; doc.text(tl, 15, y); }
     y += 12;
     doc.setTextColor(0);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(22);
-    doc.text(`${r.correct} / ${r.total}  (${r.pct}%)`, 15, y);
+    doc.text(S.rules ? `${fmtM(r.marks)} / ${fmtM(r.max)} marks` : `${r.correct} / ${r.total}  (${r.pct}%)`, 15, y);
     y += 12;
-    const line = (txt, bold) => {
+    resultsLines(r).forEach(([txt, head]) => {
       if (y > 280) { doc.addPage(); y = 20; }
-      doc.setFont('helvetica', bold ? 'bold' : 'normal');
-      doc.setFontSize(bold ? 12 : 11);
+      if (head) y += 3;
+      doc.setFont('helvetica', head ? 'bold' : 'normal');
+      doc.setFontSize(head ? 12 : 11);
       doc.text(txt, 15, y);
-      y += bold ? 8 : 6;
-    };
-    if (r.wrong.length) {
-      line(`Wrong answers (${r.wrong.length})`, true);
-      r.wrong.forEach((i) => line(`${i.q}:  You ${label(i.a)}   Correct ${label(i.k)}`));
-      y += 4;
-    }
-    if (r.missed.length) {
-      line(`Skipped or blank (${r.missed.length})`, true);
-      r.missed.forEach((i) => line(`${i.q}:  ${i.a === 'skip' ? 'Skipped' : 'Blank'}   Correct ${label(i.k)}`));
-    }
+      y += head ? 8 : 6;
+    });
     doc.save(`${fileSafe()}_results.pdf`);
   });
 
@@ -701,10 +870,12 @@
       const v = S.answers[q];
       if (filter === 'skipped' && v !== 'skip') continue;
       if (filter === 'unanswered' && v !== undefined) continue;
+      if (filter === 'flagged' && !S.flags[q]) continue;
       const b = document.createElement('button');
       b.textContent = q;
       if (v === 'skip') b.classList.add('skipped');
       else if (v !== undefined) b.classList.add('answered');
+      if (S.flags[q]) b.classList.add('flagged');
       if (q === S.current) b.classList.add('current');
       b.addEventListener('click', () => { $('#dlgGrid').close(); go(q); });
       grid.appendChild(b);
@@ -755,20 +926,23 @@
       persist();
       return renderKeys();
     }
-    if (document.body.dataset.page !== 'tracker') return;
+    if (document.body.dataset.page !== 'tracker' || document.body.classList.contains('welcoming')) return;
     if (!S || S.finished || document.querySelector('dialog[open]')) return;
     if (/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
     const action = Object.keys(keys).find((a) => keys[a] === e.code);
     if (!action) return;
     e.preventDefault();
     if (action === 'skip') skip();
+    else if (action === 'flag') toggleFlag();
     else if (action === 'prev') go(S.current - 1);
     else if (action === 'next') go(S.current + 1);
-    else { const i = parseInt(action.slice(1), 10); if (i < S.options) answer(i); }
+    else { const i = parseInt(action.slice(1), 10); if (i < S.options && typeOf(S.current) !== 'numeric') answer(i); }
   });
 
   window.ZC = {
     toast,
+    startSession,
+    hasSession: () => !!S,
     dockUpdate() {
       const d = $('#dock');
       if (d) d.classList.toggle('hidden', !$('#dockMusic').textContent && !$('#dockPomo').textContent);

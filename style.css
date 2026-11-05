@@ -305,3 +305,56 @@ input[type="range"] { width: 100%; accent-color: var(--ink); padding: 0; }
   .pomo-set { grid-template-columns: 1fr 1fr; }
   .pomo-set .mini { grid-column: 1 / -1; }
 }
+
+/* ---------- Flags, question types, Exam Zone ---------- */
+.markwrap { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.secbar { display: flex; gap: 6px; overflow-x: auto; padding: 14px 0 2px; scrollbar-width: thin; }
+.secbar button { white-space: nowrap; padding: 5px 12px; font-size: 12px; border-radius: 999px; }
+.secbar button.on { background: var(--ink); color: var(--ink-text); border-color: var(--ink); }
+.qwrap .status + .status { margin-top: 2px; }
+.qtools { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
+.qtools .skip { margin-top: 0; padding: 12px 6px; }
+.skip.on { border-style: solid; border-color: var(--ink); color: var(--text); background: var(--soft); }
+.numbox { display: grid; gap: 10px; }
+.numbox input { font-size: 30px; text-align: center; padding: 18px; font-family: var(--display); }
+.num-btns { display: grid; grid-template-columns: auto 1fr; gap: 10px; }
+.num-btns .mini { padding: 0 20px; font-size: 18px; border-radius: 12px; }
+.grid button { position: relative; }
+.grid button.flagged::after {
+  content: ""; position: absolute; top: 4px; right: 4px; width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: .75;
+}
+.krow.wide { grid-column: span 2; }
+.krow input { width: 84px; padding: 6px 8px; font-size: 14px; border-radius: 8px; }
+.kchips { display: flex; gap: 4px; flex-wrap: wrap; }
+.kchips button { padding: 6px 10px; font-size: 13px; border-radius: 8px; }
+.kchips button.on { background: var(--ink); color: var(--ink-text); border-color: var(--ink); }
+.exams { display: grid; gap: 12px; margin-top: 16px; }
+.presets { display: flex; gap: 8px; flex-wrap: wrap; }
+.rules { display: grid; gap: 12px; }
+.rule { border: 1px solid var(--line); border-radius: 14px; padding: 14px; background: var(--raised); display: grid; gap: 10px; }
+.rule-name { font-weight: 600; font-size: 14px; }
+.rule-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; }
+#examCfg h2 { margin-bottom: 8px; }
+#examForm { margin-top: 14px; }
+
+/* ---------- Welcome screen ---------- */
+.seen .welcome { display: none; }
+body.welcoming { overflow: hidden; }
+.welcome {
+  position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; text-align: center; cursor: pointer;
+  background: radial-gradient(700px 520px at 50% 30%, var(--glow), transparent 70%), var(--bg);
+  transition: opacity .5s ease, transform .5s ease;
+}
+.welcome.hide { opacity: 0; transform: scale(1.03); pointer-events: none; }
+.welcome-inner { display: grid; justify-items: center; gap: 6px; padding: 24px; animation: welcome-in .9s ease both; }
+.welcome-mark {
+  display: grid; place-items: center; width: 84px; height: 84px; border-radius: 24px; margin-bottom: 18px;
+  background: var(--ink); color: var(--ink-text); font-family: var(--display); font-size: 56px; padding-bottom: 6px;
+  box-shadow: var(--shadow);
+}
+.welcome-title { margin: 0; font-family: var(--display); font-weight: 400; font-size: clamp(44px, 12vw, 72px); line-height: 1.05; }
+.welcome-sub { margin: 10px 0 26px; color: var(--muted); max-width: 300px; }
+.welcome-btn { padding: 15px 56px; font-size: 16px; border-radius: 999px; }
+.welcome-hint { margin: 12px 0 0; opacity: .7; }
+@keyframes welcome-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .welcome-inner { animation: none; } }

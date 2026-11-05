@@ -10,10 +10,24 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<script>
+  try { if (sessionStorage.getItem('zc_welcomed')) document.documentElement.classList.add('seen'); } catch (e) {}
+</script>
 <script src="themes.js"></script>
 <link rel="stylesheet" href="style.css">
 </head>
-<body data-page="home">
+<body data-page="home" class="welcoming">
+
+<div id="welcome" class="welcome" role="dialog" aria-label="Welcome">
+  <div class="welcome-inner">
+    <span class="welcome-mark">Z</span>
+    <p class="eyebrow">Welcome to</p>
+    <h1 class="welcome-title">ZeroCheck</h1>
+    <p class="welcome-sub">Your study hub for tests, focus and calm.</p>
+    <button id="btnEnter" class="primary welcome-btn">Enter</button>
+    <p class="muted small welcome-hint">or tap anywhere</p>
+  </div>
+</div>
 
 <header class="top">
   <a class="brand" href="#home"><span class="mark">Z</span><span>ZeroCheck</span></a>
@@ -41,6 +55,7 @@
 
     <div class="cards">
       <a class="tile" href="#tracker"><span class="t-title">Test Tracker</span><span class="t-sub">Tap answers, time each question, check against a key</span></a>
+      <a class="tile" href="#exam"><span class="t-title">Exam Zone</span><span class="t-sub">Full-length NEET, JEE Main and JEE Advanced mocks with real marking</span></a>
       <a class="tile" href="#focus"><span class="t-title">Focus &amp; Notes</span><span class="t-sub">Pomodoro timer with a notes area</span></a>
       <a class="tile" href="#music"><span class="t-title">Ambience &amp; Music</span><span class="t-sub">Ambient scenes, your own music, YouTube</span></a>
       <button id="tileBackup" class="tile"><span class="t-title">Backup &amp; Restore</span><span class="t-sub">Save your data to your Google Drive or a file</span></button>
@@ -102,6 +117,18 @@
           <span class="lbl">Timer minutes</span>
           <input id="inMinutes" type="number" min="1" step="any" placeholder="e.g. 90">
         </label>
+        <label>
+          <span class="lbl">Marking</span>
+          <select id="inMarking">
+            <option value="none">Off</option>
+            <option value="custom">Custom</option>
+          </select>
+        </label>
+        <div id="markWrap" class="markwrap full hidden">
+          <label><span class="lbl">Correct (+)</span><input id="inMarkC" type="number" step="any" value="4"></label>
+          <label><span class="lbl">Wrong (−)</span><input id="inMarkW" type="number" step="any" value="1"></label>
+          <label><span class="lbl">Skipped</span><input id="inMarkU" type="number" step="any" value="0"></label>
+        </div>
         <button type="submit" class="primary full">Start session</button>
       </form>
     </section>
@@ -120,14 +147,27 @@
         </div>
       </div>
 
+      <div id="secBar" class="secbar hidden"></div>
       <div class="qwrap">
         <span class="eyebrow">Question</span>
         <strong id="qNum">1</strong>
         <span id="qStatus" class="status"></span>
+        <span id="qHint" class="status"></span>
       </div>
 
       <div id="options" class="options"></div>
-      <button id="btnSkip" class="skip">Skip question</button>
+      <div id="numBox" class="numbox hidden">
+        <input id="numIn" type="text" inputmode="decimal" autocomplete="off" placeholder="Type the answer">
+        <div class="num-btns">
+          <button id="btnNumNeg" class="mini" aria-label="Toggle minus sign">±</button>
+          <button id="btnNumSave" class="primary">Save &amp; next</button>
+        </div>
+      </div>
+      <div class="qtools">
+        <button id="btnSkip" class="skip">Skip</button>
+        <button id="btnFlag" class="skip">⚑ Flag</button>
+        <button id="btnClear" class="skip">Clear</button>
+      </div>
 
       <div class="nav">
         <button id="btnPrev">← Previous</button>
@@ -147,6 +187,7 @@
         <div><span id="stAnswered">0</span><small>Answered</small></div>
         <div><span id="stSkipped">0</span><small>Skipped</small></div>
         <div><span id="stNone">0</span><small>Not answered</small></div>
+        <div id="stFlagBox" class="hidden"><span id="stFlag">0</span><small>Flagged</small></div>
         <div id="stTimeBox"><span id="stTime">0</span><small>Time</small></div>
       </div>
 
@@ -215,9 +256,14 @@
         <div><span id="rsCorrect">0</span><small>Correct</small></div>
         <div><span id="rsWrong">0</span><small>Wrong</small></div>
         <div><span id="rsMissed">0</span><small>Skipped / blank</small></div>
+        <div id="rsPartialBox" class="hidden"><span id="rsPartial">0</span><small>Partial</small></div>
         <div id="rsNoKeyBox"><span id="rsNoKey">0</span><small>No key</small></div>
       </div>
 
+      <div id="subjBox" class="hidden">
+        <div class="list-title">By subject</div>
+        <div id="subjList" class="list"></div>
+      </div>
       <div id="wrongList"></div>
 
       <label id="timeOptR" class="check">
@@ -235,6 +281,48 @@
       </div>
     </section>
 
+  </section>
+
+  <!-- Exam Zone -->
+  <section id="page-exam" class="page hidden">
+    <div class="toolbar"><a class="link" href="#home">← Home</a></div>
+    <div class="card">
+      <p class="eyebrow">Exam zone</p>
+      <h2>Full-length mock</h2>
+      <p class="muted small">Pick an exam. The question count, sections, time limit and marking are filled in for you, and you can edit them before you start.</p>
+      <div id="examPick" class="exams"></div>
+    </div>
+    <div id="examCfg" class="card hidden">
+      <p class="eyebrow" id="examEyebrow">Setup</p>
+      <h2 id="examTitle">NEET UG</h2>
+      <p id="examDesc" class="muted small"></p>
+      <form id="examForm">
+        <label class="full">
+          <span class="lbl">Test name <em>Optional</em></span>
+          <input id="exName" type="text" maxlength="60" placeholder="e.g. Mock Test 4" autocomplete="off">
+        </label>
+        <label>
+          <span class="lbl">Time limit (minutes)</span>
+          <input id="exMinutes" type="number" min="0" step="any">
+        </label>
+        <label>
+          <span class="lbl">Option style</span>
+          <select id="exStyle">
+            <option value="numbers">1, 2, 3, 4</option>
+            <option value="letters">A, B, C, D</option>
+            <option value="roman">I, II, III, IV</option>
+          </select>
+        </label>
+        <div id="exPresets" class="full presets"></div>
+        <p class="muted small full" id="exTimeNote">Leave the time empty or 0 for a stopwatch instead of a timer.</p>
+        <div class="full">
+          <div class="list-title">Marking</div>
+          <div id="exRules" class="rules"></div>
+          <p class="muted small">Check the official brochure for the current pattern. Patterns and marking can change from year to year.</p>
+        </div>
+        <button type="submit" class="primary full">Start exam</button>
+      </form>
+    </div>
   </section>
 
   <!-- Focus & Notes -->
@@ -319,10 +407,10 @@
     <div class="toolbar"><a class="link" href="#home">← Home</a></div>
     <div class="card">
       <p class="eyebrow">About</p>
-      <h2>Hi, I am Vansh Chandrakar</h2>
-      <p>I was bored the night before a test, so I built a website instead of studying. It turned into ZeroCheck, a study hub for tracking and checking your practice tests. Terrible time management, great app.</p>
+      <h2>Hi, I'm [Your Name]</h2>
+      <p>[Write a short bio here: your college, what you study, and why you built ZeroCheck.]</p>
       <div class="list-title">Contact</div>
-      <p class="muted">vanshchandrakar1111@gmail.com</p>
+      <p class="muted">[Your email or Instagram handle]</p>
       <div class="list-title">What ZeroCheck does</div>
       <p class="muted">Track your answers during a practice test, time every question, check them against an answer key, and export the results. It also has a focus timer, notes, ambient sounds and a scientific calculator.</p>
       <div class="list-title">Your data</div>
@@ -348,6 +436,7 @@
     <button data-filter="all" class="chip on">All</button>
     <button data-filter="skipped" class="chip">Skipped</button>
     <button data-filter="unanswered" class="chip">Not answered</button>
+    <button data-filter="flagged" class="chip">Flagged</button>
   </div>
   <div id="grid" class="grid"></div>
   <p class="muted small">Filled = answered. Dashed = skipped. Plain = not visited.</p>
@@ -446,5 +535,6 @@
 <script src="focus.js"></script>
 <script src="music.js"></script>
 <script src="calc.js"></script>
+<script src="exam.js"></script>
 </body>
 </html>
